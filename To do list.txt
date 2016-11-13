@@ -1,18 +1,18 @@
 https://www.kaggle.com/marcusdelrio/d/dansbecker/nba-shot-logs/adjusting-fg-for-shot-difficulty
 
-1. select top effective attributes (regression, most Math.abs(parameter)) (by Chen)
+1. select top effective attributes (regression, most Math.abs(parameter)) (by Sam)
 
 https://www.kaggle.com/epattaro/d/dansbecker/nba-shot-logs/first-step-processing-data-plotting-fitting
 
-2. FGM% by player
+2. FGM% by player (Chen)
 
-3. attempts, FGM and efficiency by player
+3. attempts, FGM and efficiency by player (Chen)
 
-4. FGM% by top effective attributes and regression
+4. FGM% by top effective attributes and regression (Sam)
 
-5. classifier svm
+5. classifier svm (Zijun)
 
-6. preprocess data (by Sam)
+6. preprocess data (done by Sam)
 
 
 
