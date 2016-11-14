@@ -20,6 +20,24 @@ def count_game(player_id):
 
 
 
+def preprocess():
+    global data
+
+    del data['SHOT_RESULT']
+    del data['W']
+
+    #remove invalid data
+    print(len(data[data['TOUCH_TIME'] < 0]))
+    print(round(len(data[data['TOUCH_TIME'] < 0]) / float(len(data)), 3) * 100, '%')
+    data = data[data['TOUCH_TIME'] > 0]
+
+    print(len(data[data.SHOT_CLOCK.isnull() == True]))
+    print(round(float(len(data[data.SHOT_CLOCK.isnull() == True])) / float(len(data)), 2) * 100, '%')
+    data = data[data.SHOT_CLOCK.isnull() == False]
+
+
+
+
 def process():
     preprocess()
 
@@ -48,13 +66,6 @@ def process():
 
     efficiency(players)
 
-
-def preprocess():
-    global data
-    #remove invalid data
-    print(len(data[data['TOUCH_TIME'] < 0]))
-    print(round(len(data[data['TOUCH_TIME'] < 0]) / float(len(data)), 3) * 100, '%')
-    data = data[data['TOUCH_TIME'] > 0]
 
 
 def FGM(players):
