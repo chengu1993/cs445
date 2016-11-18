@@ -6,20 +6,6 @@ import statsmodels.api as sm
 data = pandas.read_csv("data/shot_logs.csv", low_memory=False)
 
 
-def count_shots(player_id):
-    return len(data[data['player_id'] == player_id])
-
-
-def count_shots_made(player_id):
-    shots_made = data[data['FGM'] == 1]
-    return len(shots_made[shots_made['player_id'] == player_id])
-
-def count_game(player_id):
-    game = data[data['player_id'] == player_id]
-    return len(game.groupby('GAME_ID'))
-
-
-
 def preprocess():
     global data
 
@@ -41,72 +27,107 @@ def preprocess():
 def process():
     preprocess()
 
-    players = pandas.DataFrame(list(set(data['player_id'])))
-    players.columns = ['player_id']
-
-    players['total_attempts'] = players['player_id'].apply(count_shots)
-    players['FGM'] = players['player_id'].apply(count_shots_made)
-    players['FGM_ratio'] = players['FGM'] / players['total_attempts']
-    players['FGM_ratio_low'], players['FGM_ratio_upp'] = sm.stats.proportion_confint(players['FGM'],
-                                                                                     players['total_attempts'],
-                                                                                     method='jeffrey')
-
-    players['FGM_ratio_low'] = players['FGM_ratio'] - players['FGM_ratio_low']
-    players['FGM_ratio_upp'] = players['FGM_ratio_upp'] - players['FGM_ratio']
-
-    players['total_games'] = players['player_id'].apply(count_game)
-
-    players['avg_attempts_per_game'] = players['total_attempts'] / players['total_games']
-
-    players['avg_FGM_per_game'] = players['FGM'] / players['total_games']
-
-    players = players.sort_values('FGM_ratio', ascending=False)
-
-    FGM(players)
-
-    efficiency(players)
+    # players = pandas.DataFrame(list(set(data['player_id'])))
+    # players.columns = ['player_id']
+    #
+    # players['total_attempts'] = players['player_id'].apply(count_shots)
+    # players['FGM'] = players['player_id'].apply(count_shots_made)
+    # players['FGM_ratio'] = players['FGM'] / players['total_attempts']
 
 
 
-def FGM(players):
+    #defenders
+    defenders = pandas.concat([data['CLOSEST_DEFENDER_PLAYER_ID'], data['CLOSEST_DEFENDER']], axis=1, keys=['PLAYER_ID','PLAYER'])
+    defenders = defenders.drop_duplicates()
 
+    #shooters
+    shooters = pandas.concat([data['player_id'], data['player_name']], axis=1, keys=['PLAYER_ID','PLAYER'])
+    shooters = shooters.drop_duplicates()
+
+    #calculate FG%
+    for index, row in shooters.iterrows():
+        cur_idx = row['PLAYER_ID']
+        shooters.loc[ (shooters['PLAYER_ID'] == cur_idx), 'FGM'] = data[ (data['FGM'] == 1) & (data['player_id'] == cur_idx)]['player_id'].count()
+
+        shooters.loc[ (shooters['PLAYER_ID'] == cur_idx), 'FGA'] = data[ (data['player_id'] == cur_idx)]['player_id'].count()
+        shooters.loc[ (shooters['PLAYER_ID'] == cur_idx), 'total_games'] = data[(data['player_id'] == cur_idx)]['GAME_ID'].drop_duplicates().count()
+
+    shooters['FG%'] = shooters['FGM'] / shooters['FGA']
+
+    #calculate DFG%
+    for index, row in defenders.iterrows():
+        cur_idx = row['PLAYER_ID']
+        defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'DFGM'] = data[(data['FGM'] == 1) & (data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx)]['player_id'].count()
+        defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'DFGA'] = data[(data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx)]['player_id'].count()
+        defenders['DFG%'] = defenders['DFGM'] / defenders['DFGA']
+
+        #OFG%
+        shooter_dict = {}
+        for shooter_idx, shooter_row in shooters.iterrows():
+            shooter_id = shooter_row['PLAYER_ID']
+            shots_against_player = data[(data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx) & (data['player_id'] == shooter_id)]['player_id'].count()
+            if shots_against_player > 0:
+                shooter_dict[shooter_id] = shots_against_player
+        OFG_ratio = 0
+        total_shots = defenders[defenders['PLAYER_ID'] == cur_idx]['DFGA']
+        for shooter_id, shots in shooter_dict.items():
+            OFG_ratio += shots / total_shots * shooters[(shooters['PLAYER_ID'] == shooter_id)].iloc[0]['FG%']
+        defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'OFG%'] = OFG_ratio
+    defenders['diff'] = defenders['OFG%'] - defenders['DFG%']
+    diff_df = defenders.sort_values(by='diff', axis=0, ascending=False, inplace=False)
+    print(diff_df[(diff_df['DFGA'] >= 100)].head(10))
+
+
+    FG_ratio(shooters)x
+
+
+
+def defender_rank():
+    pass
+
+
+def FG_ratio(players):
+    players['FG%_low'], players['FG%_upp'] = sm.stats.proportion_confint(players['FGM'],
+                                                                                 players['FGA'],
+                                                                                 method='jeffrey')
+    players['FG%_low'] = players['FG%'] - players['FG%_low']
+    players['FG%_upp'] = players['FG%_upp'] - players['FG%']
+
+    players = players.sort_values('FG%', ascending=False)
     #plot
     plt.figure(figsize=(20, 10))
-    plt.scatter(players.index,players.FGM_ratio.values)
-    plt.plot(players.FGM_ratio.values, 'ko')
-    plt.errorbar(numpy.arange(len(players)), players.FGM_ratio.values, yerr=[players['FGM_ratio_low'], players['FGM_ratio_upp']])
+    #plt.scatter(players.index,players.FGM_ratio.values)
+    plt.plot(players['FG%'], 'ko', color='black')
+    plt.errorbar(numpy.arange(len(players)), players['FG%'], yerr=[players['FG%_low'], players['FG%_upp']])
     plt.grid()
     plt.ylim(0, 1)
     plt.xlim(-5, 290)
-    plt.title('FGM % by player')
-    plt.ylabel('FGM %')
+    plt.title('FG% by player')
+    plt.ylabel('FG%')
     plt.xlabel('different players')
     plt.show()
 
-
-def efficiency(players):
-    print(players.head())
-
-    players = players.sort_values('avg_attempts_per_game', ascending=False)
-
+    players['avg_FGA_per_game'] = players['FGA'] / players['total_games']
+    players['avg_FGM_per_game'] = players['FGM'] / players['total_games']
+    players = players.sort_values('avg_FGA_per_game', ascending=False)
     plt.figure(figsize=(20,10))
-    plt.plot(players['avg_attempts_per_game'].values, 'ko', color='black')
+    plt.plot(players['avg_FGA_per_game'].values, 'ko', color='black')
     plt.plot(players['FGM'].values / players['total_games'].values, 'ko', color='green')
     plt.grid()
     plt.xlim(-5, 290)
-
-    plt.title('players atempts, FGM and efficiency')
-    plt.ylabel('attempts & FGM')
+    plt.title('players FGA, FGM and FG%')
+    plt.ylabel('FGA & FGM')
     plt.xlabel('different players')
 
-    plt.legend(['attempts', 'FGM'], markerscale=2, loc='upper left', prop={'size': 24})
+    plt.legend(['FGA', 'FGM'], markerscale=2, loc='upper left', prop={'size': 24})
 
     plt.twinx()
 
-    plt.plot(players['FGM_ratio'].values, 'ko', color='red')
+    plt.plot(players['FG%'].values, 'ko', color='red')
     plt.ylim(0, 1)
     plt.yticks(color='red')
-    plt.legend(['efficiency'], markerscale=2, prop={'size': 24})
+    plt.legend(['FG%'], markerscale=2, prop={'size': 24})
     plt.show()
+
 
 process()
