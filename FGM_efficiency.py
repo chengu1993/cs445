@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 
 data = pandas.read_csv("data/shot_logs.csv", low_memory=False)
+# data = data[0:100]
 
 
 def preprocess():
@@ -27,24 +28,15 @@ def preprocess():
 def process():
     preprocess()
 
-    # players = pandas.DataFrame(list(set(data['player_id'])))
-    # players.columns = ['player_id']
-    #
-    # players['total_attempts'] = players['player_id'].apply(count_shots)
-    # players['FGM'] = players['player_id'].apply(count_shots_made)
-    # players['FGM_ratio'] = players['FGM'] / players['total_attempts']
-
-
-
-    #defenders
+    # defenders
     defenders = pandas.concat([data['CLOSEST_DEFENDER_PLAYER_ID'], data['CLOSEST_DEFENDER']], axis=1, keys=['PLAYER_ID','PLAYER'])
     defenders = defenders.drop_duplicates()
 
-    #shooters
+    # shooters
     shooters = pandas.concat([data['player_id'], data['player_name']], axis=1, keys=['PLAYER_ID','PLAYER'])
     shooters = shooters.drop_duplicates()
 
-    #calculate FG%
+    # calculate FG%
     for index, row in shooters.iterrows():
         cur_idx = row['PLAYER_ID']
         shooters.loc[ (shooters['PLAYER_ID'] == cur_idx), 'FGM'] = data[ (data['FGM'] == 1) & (data['player_id'] == cur_idx)]['player_id'].count()
@@ -54,14 +46,18 @@ def process():
 
     shooters['FG%'] = shooters['FGM'] / shooters['FGA']
 
-    #calculate DFG%
+    shooter_map = {}
+    for index, row in shooters.iterrows():
+        shooter_map[row['PLAYER_ID']] = row['FG%']
+
+    # calculate DFG%
     for index, row in defenders.iterrows():
         cur_idx = row['PLAYER_ID']
         defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'DFGM'] = data[(data['FGM'] == 1) & (data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx)]['player_id'].count()
         defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'DFGA'] = data[(data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx)]['player_id'].count()
         defenders['DFG%'] = defenders['DFGM'] / defenders['DFGA']
 
-        #OFG%
+        # OFG%
         shooter_dict = {}
         for shooter_idx, shooter_row in shooters.iterrows():
             shooter_id = shooter_row['PLAYER_ID']
@@ -74,12 +70,23 @@ def process():
             OFG_ratio += shots / total_shots * shooters[(shooters['PLAYER_ID'] == shooter_id)].iloc[0]['FG%']
         defenders.loc[(defenders['PLAYER_ID'] == cur_idx), 'OFG%'] = OFG_ratio
     defenders['diff'] = defenders['OFG%'] - defenders['DFG%']
+    defender_map = {}
+    for index, row in defenders.iterrows():
+        defender_map[row['PLAYER_ID']] = row['diff']
+
+    for index, row in data.iterrows():
+        data.loc[index, 'DEFENSE_LEVEL'] = defender_map[row['CLOSEST_DEFENDER_PLAYER_ID']]
+        data.loc[index, 'OFFENSE_LEVEL'] = shooter_map[row['player_id']]
+
     diff_df = defenders.sort_values(by='diff', axis=0, ascending=False, inplace=False)
     print(diff_df[(diff_df['DFGA'] >= 100)].head(10))
 
 
-    FG_ratio(shooters)x
+    data.to_csv('out.csv')
 
+    # FG_ratio(shooters)
+
+    # append to original data file
 
 
 def defender_rank():
