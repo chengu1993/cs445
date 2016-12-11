@@ -64,6 +64,7 @@ def process():
             shots_against_player = data[(data['CLOSEST_DEFENDER_PLAYER_ID'] == cur_idx) & (data['player_id'] == shooter_id)]['player_id'].count()
             if shots_against_player > 0:
                 shooter_dict[shooter_id] = shots_against_player
+
         OFG_ratio = 0
         total_shots = defenders[defenders['PLAYER_ID'] == cur_idx]['DFGA']
         for shooter_id, shots in shooter_dict.items():
@@ -81,6 +82,8 @@ def process():
     diff_df = defenders.sort_values(by='diff', axis=0, ascending=False, inplace=False)
     print(diff_df[(diff_df['DFGA'] >= 100)].head(10))
 
+    shooters.to_csv('shooters.csv')
+    defenders.to_csv('defender.csv')
 
     data.to_csv('out.csv')
 
